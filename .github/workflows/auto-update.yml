@@ -18,7 +18,7 @@ jobs:
             assets: '{"64bit": "hl-windows.zip", "arm64": "hl-windows-arm64.zip"}'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Process package ${{ matrix.package.name }}
         run: |
