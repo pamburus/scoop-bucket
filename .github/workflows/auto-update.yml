@@ -3,7 +3,7 @@ name: Auto-update Scoop Manifests
 on:
   schedule:
     # Runs daily at midnight UTC; adjust the cron schedule as needed
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
@@ -16,6 +16,10 @@ jobs:
             manifest: hl.json
             repo: pamburus/hl
             assets: '{"64bit": "hl-windows.zip", "arm64": "hl-windows-arm64.zip"}'
+          - name: termframe
+            manifest: termframe.json
+            repo: pamburus/termframe
+            assets: '{"64bit": "termframe-windows.zip", "arm64": "termframe-windows-arm64.zip"}'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,7 +28,7 @@ jobs:
         run: |
           # Read the current version from the manifest
           CURRENT_VERSION=$(jq -r '.version' "${{ matrix.package.manifest }}")
-          
+
           echo "Current version for '${{ matrix.package.name }}': $CURRENT_VERSION"
 
           # Fetch the latest release info from the upstream repository
@@ -32,7 +36,7 @@ jobs:
           LATEST_TAG=$(echo "$RELEASE_DATA" | jq -r '.tag_name')
           # Remove the leading "v" if present
           LATEST_VERSION=${LATEST_TAG#v}
-          
+
           echo "Latest upstream version for '${{ matrix.package.name }}': $LATEST_VERSION"
 
           if [ "$LATEST_VERSION" = "$CURRENT_VERSION" ]; then
@@ -42,17 +46,17 @@ jobs:
 
           # Load the asset mapping from the matrix (as a JSON string)
           ASSETS_JSON='${{ matrix.package.assets }}'
-          
+
           # Loop over each architecture in the asset mapping
           for arch in $(echo "$ASSETS_JSON" | jq -r 'keys[]'); do
             asset_filename=$(echo "$ASSETS_JSON" | jq -r --arg arch "$arch" '.[$arch]')
             ASSET_URL="https://github.com/${{ matrix.package.repo }}/releases/download/v${LATEST_VERSION}/${asset_filename}"
-            
+
             echo "Calculating hash for asset $ASSET_URL (architecture: $arch)"
-            
+
             NEW_HASH=$(curl -sSfL "$ASSET_URL" | sha256sum | awk '{print $1}')
             NEW_HASH="SHA256:$NEW_HASH"
-            
+
             echo "New hash for $arch: $NEW_HASH"
 
             # Update the URL in the manifest for this architecture
