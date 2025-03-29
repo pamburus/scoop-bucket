@@ -3,14 +3,14 @@
   "homepage": "https://github.com/pamburus/termframe",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/pamburus/termframe/releases/download/v0.4.0/termframe-windows.zip",
-      "hash": "SHA256:64a65da8c75619e8a8d6283d09baf9f5fa1beb74bd104f6a36fe3252240dfc46"
+      "url": "https://github.com/pamburus/termframe/releases/download/v0.4.2/termframe-windows.zip",
+      "hash": "SHA256:f4ade407f3e3c360fc1344b5f8bd12d2a3bbb25107dddc8ea8fe01c623074672"
     },
     "arm64": {
-      "url": "https://github.com/pamburus/termframe/releases/download/v0.4.0/termframe-windows-arm64.zip",
-      "hash": "SHA256:cfd1360a8054f71c0db2f153dd106ddd6eb900e43a0249bb49c5c5b7c7c1f67b"
+      "url": "https://github.com/pamburus/termframe/releases/download/v0.4.2/termframe-windows-arm64.zip",
+      "hash": "SHA256:d35d97b42b7ca6e5504b8ecf523ef04049473f875b2f02581302ecc6309fdded"
     }
   },
-  "version": "0.4.0",
+  "version": "0.4.2",
   "license": "MIT"
 }
