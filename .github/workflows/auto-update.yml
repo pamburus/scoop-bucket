@@ -10,6 +10,8 @@ jobs:
   update-manifests:
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 1
+      fail-fast: false
       matrix:
         package:
           - name: hl
@@ -26,65 +28,11 @@ jobs:
 
       - name: Process package ${{ matrix.package.name }}
         run: |
-          # Read the current version from the manifest
-          CURRENT_VERSION=$(jq -r '.version' "${{ matrix.package.manifest }}")
-
-          echo "Current version for '${{ matrix.package.name }}': $CURRENT_VERSION"
-
-          # Fetch the latest release info from the upstream repository
-          RELEASE_DATA=$(curl -s "https://api.github.com/repos/${{ matrix.package.repo }}/releases/latest")
-          LATEST_TAG=$(echo "$RELEASE_DATA" | jq -r '.tag_name')
-          # Remove the leading "v" if present
-          LATEST_VERSION=${LATEST_TAG#v}
-
-          echo "Latest upstream version for '${{ matrix.package.name }}': $LATEST_VERSION"
-
-          if [ "$LATEST_VERSION" = "$CURRENT_VERSION" ]; then
-            echo "No update needed for '${{ matrix.package.name }}'."
-            exit 0
-          fi
-
-          # Load the asset mapping from the matrix (as a JSON string)
-          ASSETS_JSON='${{ matrix.package.assets }}'
-
-          # Loop over each architecture in the asset mapping
-          for arch in $(echo "$ASSETS_JSON" | jq -r 'keys[]'); do
-            asset_filename=$(echo "$ASSETS_JSON" | jq -r --arg arch "$arch" '.[$arch]')
-            ASSET_URL="https://github.com/${{ matrix.package.repo }}/releases/download/v${LATEST_VERSION}/${asset_filename}"
-
-            echo "Calculating hash for asset $ASSET_URL (architecture: $arch)"
-
-            NEW_HASH=$(curl -sSfL "$ASSET_URL" | sha256sum | awk '{print $1}')
-            NEW_HASH="SHA256:$NEW_HASH"
-
-            echo "New hash for $arch: $NEW_HASH"
-
-            # Update the URL in the manifest for this architecture
-            jq --arg arch "$arch" --arg new_url "$ASSET_URL" \
-              '.architecture[$arch].url = $new_url' \
-              "${{ matrix.package.manifest }}" \
-              > tmp.json \
-            && mv tmp.json "${{ matrix.package.manifest }}"
-
-            # Update the hash in the manifest for this architecture
-            jq --arg arch "$arch" --arg new_hash "$NEW_HASH" \
-              '.architecture[$arch].hash = $new_hash' \
-              "${{ matrix.package.manifest }}" \
-              > tmp.json \
-            && mv tmp.json "${{ matrix.package.manifest }}"
-          done
-
-          # Update the version field in the manifest
-          jq --arg version "$LATEST_VERSION" '.version = $version' \
-            "${{ matrix.package.manifest }}" \
-            > tmp.json && mv tmp.json "${{ matrix.package.manifest }}"
-
-          # Configure Git and commit changes
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "${{ matrix.package.manifest }}"
-          git commit -m "auto-update ${{ matrix.package.name }} to version $LATEST_VERSION" \
-            || echo "No changes to commit"
+          python3 build/update_manifest.py \
+            --package "${{ matrix.package.name }}" \
+            --repo "${{ matrix.package.repo }}" \
+            --manifest "${{ matrix.package.manifest }}" \
+            --assets "${{ matrix.package.assets }}"
 
       - name: Push changes
         run: |
