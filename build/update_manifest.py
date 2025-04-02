@@ -61,7 +61,7 @@ def main():
     except json.JSONDecodeError as e:
         raise RuntimeError(f"Invalid JSON for assets argument: {e}")
 
-    # Collect the URLs and hashes for the assets and build archtecture mapping
+    # Collect the URLs and hashes for the assets and build architecture mapping
     arch_mapping = {}
     for arch, asset_filename in assets_json.items():
         asset_url = f"https://github.com/{repo}/releases/download/v{latest_version}/{asset_filename}"
