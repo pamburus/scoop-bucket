@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
-import json
-import subprocess
-import urllib.request
-import hashlib
 import argparse
+import hashlib
+import http.client
+import json
+import re
+import subprocess
+import urllib.error
+import urllib.request
+
 
 def main():
     parser = argparse.ArgumentParser(description="Update package version and assets.")
@@ -27,11 +31,18 @@ def main():
     print(f"Current version for '{package}': {current_version}")
 
     # Fetch the latest release info from the upstream repository
-    with urllib.request.urlopen(f"https://api.github.com/repos/{repo}/releases/latest") as response:
-        release_data = json.loads(response.read().decode())
+    try:
+        with urllib.request.urlopen(f"https://api.github.com/repos/{repo}/releases/latest") as response:
+            if response.status != 200:
+                raise RuntimeError(f"Failed to fetch latest release info: HTTP {response.status}")
+            release_data = json.loads(response.read().decode())
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Network error: {e.reason}")
+    except http.client.HTTPException as e:
+        raise RuntimeError(f"HTTP error: {e}")
+
+    # Parse the latest version from the release info
     latest_tag = release_data['tag_name']
-    # Remove the leading "v" if present
-    import re
     match = re.match(r"^v\d+\.\d+\.\d+$", latest_tag)
     if match:
         latest_version = latest_tag[1:]  # Remove the leading "v"
@@ -48,6 +59,7 @@ def main():
     assets_json = json.loads(assets)
 
     # Loop over each architecture in the asset mapping
+    arch_obj = {}
     for arch, asset_filename in assets_json.items():
         asset_url = f"https://github.com/{repo}/releases/download/v{latest_version}/{asset_filename}"
 
@@ -59,11 +71,13 @@ def main():
 
         print(f"New hash for {arch}: {new_hash}")
 
-        # Update the URL in the manifest for this architecture
-        manifest_data['architecture'][arch]['url'] = asset_url
+        arch_obj[arch] = {
+            'url': asset_url,
+            'hash': new_hash
+        }
 
-        # Update the hash in the manifest for this architecture
-        manifest_data['architecture'][arch]['hash'] = new_hash
+    # Update the architecture field in the manifest
+    manifest_data['architecture'] = arch_obj
 
     # Update the version field in the manifest
     manifest_data['version'] = latest_version
@@ -75,13 +89,22 @@ def main():
         print(f"Skipping commit for '{package}'.")
         return
 
-    # Configure Git and commit changes
+    # Configure Git and prepare to commit the changes
     subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
     subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
     subprocess.run(["git", "add", manifest_path], check=True)
+
+    # Check if there are changes to commit
+    result = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+    if result.stdout == "":
+        print(f"No changes to commit for '{package}'.")
+        return
+
+    # Commit the changes
     subprocess.run(["git", "commit", "-m", f"auto-update {package} to version {latest_version}"], check=True)
 
     print(f"Updated '{package}' to version {latest_version}.")
+
 
 if __name__ == "__main__":
     try:
