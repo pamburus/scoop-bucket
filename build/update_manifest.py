@@ -32,7 +32,7 @@ def main():
 
     # Fetch the latest release info from the upstream repository
     try:
-        with urllib.request.urlopen(f"https://api.github.com/repos/{repo}/releases/latest") as response:
+        with urllib.request.urlopen(f"https://api.github.com/repos/{repo}/releases/latest", timeout=10) as response:
             if response.status != 200:
                 raise RuntimeError(f"Failed to fetch latest release info: HTTP {response.status}")
             release_data = json.loads(response.read().decode())
