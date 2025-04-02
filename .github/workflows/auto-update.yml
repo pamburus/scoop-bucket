@@ -26,6 +26,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Update branch with latest changes if on main
+        if: github.ref == 'refs/heads/main'
+        run: git fetch origin main && git reset --hard origin/main
+
       - name: Process package ${{ matrix.package.name }}
         run: |
           python3 build/update_manifest.py \
