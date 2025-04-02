@@ -60,8 +60,9 @@ def main():
         assets_json = json.loads(assets)
     except json.JSONDecodeError as e:
         raise RuntimeError(f"Invalid JSON for assets argument: {e}")
-    # Loop over each architecture in the asset mapping
-    arch_obj = {}
+
+    # Collect the URLs and hashes for the assets and build archtecture mapping
+    arch_mapping = {}
     for arch, asset_filename in assets_json.items():
         asset_url = f"https://github.com/{repo}/releases/download/v{latest_version}/{asset_filename}"
 
@@ -73,13 +74,13 @@ def main():
 
         print(f"New hash for {arch}: {new_hash}")
 
-        arch_obj[arch] = {
+        arch_mapping[arch] = {
             'url': asset_url,
             'hash': new_hash
         }
 
     # Update the architecture field in the manifest
-    manifest_data['architecture'] = arch_obj
+    manifest_data['architecture'] = arch_mapping
 
     # Update the version field in the manifest
     manifest_data['version'] = latest_version
