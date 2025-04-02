@@ -10,6 +10,29 @@ import urllib.error
 import urllib.request
 
 
+def fetch_url(url, timeout=10):
+    try:
+        response = urllib.request.urlopen(url, timeout=timeout)
+        if response.status != 200:
+            response.close()
+            raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
+        return response
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"Network error: {e.reason}")
+    except http.client.HTTPException as e:
+        raise RuntimeError(f"HTTP error: {e}")
+
+
+def calculate_hash(response):
+    sha256_hash = hashlib.sha256()
+    while True:
+        chunk = response.read(8192)
+        if not chunk:
+            break
+        sha256_hash.update(chunk)
+    return sha256_hash.hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Update package version and assets.")
     parser.add_argument("--package", required=True, help="Name of the package to update")
@@ -31,15 +54,8 @@ def main():
     print(f"Current version for '{package}': {current_version}")
 
     # Fetch the latest release info from the upstream repository
-    try:
-        with urllib.request.urlopen(f"https://api.github.com/repos/{repo}/releases/latest", timeout=10) as response:
-            if response.status != 200:
-                raise RuntimeError(f"Failed to fetch latest release info: HTTP {response.status}")
-            release_data = json.loads(response.read().decode())
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Network error: {e.reason}")
-    except http.client.HTTPException as e:
-        raise RuntimeError(f"HTTP error: {e}")
+    with fetch_url(f"https://api.github.com/repos/{repo}/releases/latest") as response:
+        release_data = json.load(response)
 
     # Parse the latest version from the release info
     latest_tag = release_data['tag_name']
@@ -68,20 +84,15 @@ def main():
 
         print(f"Calculating hash for asset {asset_url} (architecture: {arch})")
 
-        try:
-            with urllib.request.urlopen(asset_url, timeout=10) as response:
-                if response.status != 200:
-                    raise RuntimeError(f"Failed to download asset {asset_url}: HTTP {response.status}")
-                new_hash = hashlib.sha256(response.read()).hexdigest()
-        except (urllib.error.URLError, http.client.HTTPException) as e:
-            raise RuntimeError(f"Error downloading asset {asset_url}: {e}")
-        new_hash = f"SHA256:{new_hash}"
+        with fetch_url(asset_url) as response:
+            new_hash = calculate_hash(response)
+        formatted_hash = f"SHA256:{new_hash}"
 
-        print(f"New hash for {arch}: {new_hash}")
+        print(f"New hash for {arch}: {formatted_hash}")
 
         arch_mapping[arch] = {
             'url': asset_url,
-            'hash': new_hash
+            'hash': formatted_hash
         }
 
     # Update the architecture field in the manifest
