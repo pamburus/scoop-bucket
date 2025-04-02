@@ -67,7 +67,7 @@ def main():
 
         print(f"Calculating hash for asset {asset_url} (architecture: {arch})")
 
-        with urllib.request.urlopen(asset_url) as response:
+        with urllib.request.urlopen(asset_url, timeout=10) as response:
             new_hash = hashlib.sha256(response.read()).hexdigest()
         new_hash = f"SHA256:{new_hash}"
 
