@@ -29,9 +29,9 @@ jobs:
       - name: Process package ${{ matrix.package.name }}
         run: |
           python3 build/update_manifest.py \
-            --package ${{ matrix.package.name }} \
-            --repo ${{ matrix.package.repo }} \
-            --manifest ${{ matrix.package.manifest }} \
+            --package "${{ matrix.package.name }}" \
+            --repo "${{ matrix.package.repo }}" \
+            --manifest "${{ matrix.package.manifest }}" \
             --assets "${{ matrix.package.assets }}"
 
       - name: Push changes
