@@ -68,8 +68,13 @@ def main():
 
         print(f"Calculating hash for asset {asset_url} (architecture: {arch})")
 
-        with urllib.request.urlopen(asset_url, timeout=10) as response:
-            new_hash = hashlib.sha256(response.read()).hexdigest()
+        try:
+            with urllib.request.urlopen(asset_url, timeout=10) as response:
+                if response.status != 200:
+                    raise RuntimeError(f"Failed to download asset {asset_url}: HTTP {response.status}")
+                new_hash = hashlib.sha256(response.read()).hexdigest()
+        except (urllib.error.URLError, http.client.HTTPException) as e:
+            raise RuntimeError(f"Error downloading asset {asset_url}: {e}")
         new_hash = f"SHA256:{new_hash}"
 
         print(f"New hash for {arch}: {new_hash}")
