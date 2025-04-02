@@ -56,8 +56,10 @@ def main():
         return
 
     # Load the asset mapping from the command-line argument
-    assets_json = json.loads(assets)
-
+    try:
+        assets_json = json.loads(assets)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Invalid JSON for assets argument: {e}")
     # Loop over each architecture in the asset mapping
     arch_obj = {}
     for arch, asset_filename in assets_json.items():
