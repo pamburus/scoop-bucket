@@ -4,14 +4,14 @@
   "homepage": "https://github.com/pamburus/hl",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/pamburus/hl/releases/download/v0.31.0/hl-windows.zip",
-      "hash": "SHA256:ad16ca1d16d70ffa3dc2a4f12fd00f790c35302ef6e47a91aad8e6393accf7ce"
+      "url": "https://github.com/pamburus/hl/releases/download/v0.31.1/hl-windows.zip",
+      "hash": "SHA256:f37bdacbc7f5ab7b2f96184097fd574d4b4e6676fdb729bab20abd7a6738c49d"
     },
     "arm64": {
-      "url": "https://github.com/pamburus/hl/releases/download/v0.31.0/hl-windows-arm64.zip",
-      "hash": "SHA256:2c8ea4cf61a02b82b558f64aac111abd4861e4b273ba415e27dd25f78ef51de8"
+      "url": "https://github.com/pamburus/hl/releases/download/v0.31.1/hl-windows-arm64.zip",
+      "hash": "SHA256:a4a87bdc946adefd6d5100a7aa201ae7fcbf070e976e82660b5b0181b76f6308"
     }
   },
-  "version": "0.31.0",
+  "version": "0.31.1",
   "license": "MIT"
 }
