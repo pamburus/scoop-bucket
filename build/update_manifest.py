@@ -2,7 +2,6 @@
 
 import argparse
 import hashlib
-import http.client
 import json
 import os
 import re
@@ -10,6 +9,18 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+
+
+def fetch_url(url, timeout=10, token=None):
+    """Fetch URL with optional authentication token."""
+    request = urllib.request.Request(url)
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    response = urllib.request.urlopen(request, timeout=timeout)
+    if response.status != 200:
+        response.close()
+        raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
+    return response
 
 
 def retry_with_backoff(func, max_retries=3):
@@ -31,45 +42,34 @@ def retry_with_backoff(func, max_retries=3):
         try:
             return func()
         except urllib.error.HTTPError as e:
-            # Handle rate limiting with Retry-After header
-            if e.code in (403, 429) and attempt < max_retries - 1:
-                retry_after = e.headers.get('Retry-After')
-                if retry_after:
-                    wait_time = int(retry_after)
-                    print(f"Rate limited. Retry-After: {wait_time}s. Waiting...")
+            # HTTPError is a subclass of URLError and contains HTTP status code and headers
+            if attempt < max_retries - 1:
+                # Check for rate limiting (403/429) and honor Retry-After header
+                if e.code in (403, 429):
+                    retry_after = e.headers.get('Retry-After')
+                    if retry_after:
+                        wait_time = int(retry_after)
+                        print(f"Rate limited (HTTP {e.code}). Retry-After: {wait_time}s. Waiting...")
+                    else:
+                        wait_time = 2 ** attempt
+                        print(f"Rate limited (HTTP {e.code}). Using exponential backoff: {wait_time}s...")
                 else:
+                    # Other HTTP errors - use exponential backoff
                     wait_time = 2 ** attempt
-                    print(f"Rate limited. Using exponential backoff: {wait_time}s...")
-                time.sleep(wait_time)
-            elif attempt < max_retries - 1:
-                # Other HTTP errors - use exponential backoff
-                wait_time = 2 ** attempt
-                print(f"HTTP error {e.code}. Retrying in {wait_time}s...")
+                    print(f"HTTP error {e.code}: {e.reason}. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 raise
-        except (urllib.error.URLError, http.client.HTTPException) as e:
-            # Network errors - use exponential backoff
+        except urllib.error.URLError as e:
+            # Network-level errors (connection errors, timeouts, etc.)
             if attempt < max_retries - 1:
                 wait_time = 2 ** attempt
-                print(f"Network error: {e}. Retrying in {wait_time}s...")
+                print(f"Network error: {e.reason}. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
             else:
                 raise
     # Should not reach here, but just in case
     raise RuntimeError(f"Failed after {max_retries} attempts")
-
-
-def fetch_url(url, timeout=10, token=None):
-    """Fetch URL with optional authentication token."""
-    request = urllib.request.Request(url)
-    if token:
-        request.add_header("Authorization", f"Bearer {token}")
-    response = urllib.request.urlopen(request, timeout=timeout)
-    if response.status != 200:
-        response.close()
-        raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
-    return response
 
 
 def calculate_hash(response):
