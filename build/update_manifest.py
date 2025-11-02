@@ -4,15 +4,19 @@ import argparse
 import hashlib
 import http.client
 import json
+import os
 import re
 import subprocess
 import urllib.error
 import urllib.request
 
 
-def fetch_url(url, timeout=10):
+def fetch_url(url, timeout=10, token=None):
     try:
-        response = urllib.request.urlopen(url, timeout=timeout)
+        request = urllib.request.Request(url)
+        if token:
+            request.add_header("Authorization", f"Bearer {token}")
+        response = urllib.request.urlopen(request, timeout=timeout)
         if response.status != 200:
             response.close()
             raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
@@ -46,6 +50,13 @@ def main():
     assets = args.assets
     manifest_path = args.manifest
 
+    # Get GitHub token from environment variable
+    github_token = os.environ.get('GITHUB_TOKEN')
+    if github_token:
+        print("Using authenticated GitHub API requests")
+    else:
+        print("Warning: GITHUB_TOKEN not set, using unauthenticated requests (lower rate limit)")
+
     # Read the current version from the manifest
     with open(manifest_path, "r") as manifest_file:
         manifest_data = json.load(manifest_file)
@@ -54,7 +65,7 @@ def main():
     print(f"Current version for '{package}': {current_version}")
 
     # Fetch the latest release info from the upstream repository
-    with fetch_url(f"https://api.github.com/repos/{repo}/releases/latest") as response:
+    with fetch_url(f"https://api.github.com/repos/{repo}/releases/latest", token=github_token) as response:
         release_data = json.load(response)
 
     # Parse the latest version from the release info

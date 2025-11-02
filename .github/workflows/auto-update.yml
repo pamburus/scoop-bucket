@@ -9,6 +9,8 @@ on:
 jobs:
   update-manifests:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       max-parallel: 1
       fail-fast: false
@@ -32,11 +34,31 @@ jobs:
 
       - name: Process package ${{ matrix.package.name }}
         run: |
-          python3 build/update_manifest.py \
-            --package '${{ matrix.package.name }}' \
-            --repo '${{ matrix.package.repo }}' \
-            --manifest '${{ matrix.package.manifest }}' \
-            --assets '${{ matrix.package.assets }}'
+          # Retry logic with exponential backoff (3 attempts)
+          max_attempts=3
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts"
+            if python3 build/update_manifest.py \
+              --package '${{ matrix.package.name }}' \
+              --repo '${{ matrix.package.repo }}' \
+              --manifest '${{ matrix.package.manifest }}' \
+              --assets '${{ matrix.package.assets }}'; then
+              echo "Successfully processed package"
+              break
+            else
+              exit_code=$?
+              if [ $attempt -lt $max_attempts ]; then
+                sleep_time=$((2 ** attempt))
+                echo "Failed with exit code $exit_code. Retrying in ${sleep_time}s..."
+                sleep $sleep_time
+                attempt=$((attempt + 1))
+              else
+                echo "Failed after $max_attempts attempts"
+                exit $exit_code
+              fi
+            fi
+          done
 
       - name: Push changes
         run: |
