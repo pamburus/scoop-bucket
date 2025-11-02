@@ -49,7 +49,7 @@ jobs:
             else
               exit_code=$?
               if [ $attempt -lt $max_attempts ]; then
-                sleep_time=$((2 ** attempt))
+                sleep_time=$((2 ** (attempt - 1)))
                 echo "Failed with exit code $exit_code. Retrying in ${sleep_time}s..."
                 sleep $sleep_time
                 attempt=$((attempt + 1))
