@@ -12,56 +12,64 @@ import urllib.error
 import urllib.request
 
 
-def fetch_url_with_retry(url, timeout=10, token=None, max_retries=3):
-    """Fetch URL with retry logic that honors Retry-After header."""
+def retry_with_backoff(func, max_retries=3):
+    """
+    Generic retry wrapper that can retry any function with exponential backoff.
+    Honors Retry-After header for rate limiting errors.
+    
+    Args:
+        func: Callable to execute with retry logic
+        max_retries: Maximum number of retry attempts
+    
+    Returns:
+        The result of the successful function call
+    
+    Raises:
+        The last exception if all retries fail
+    """
     for attempt in range(max_retries):
         try:
-            request = urllib.request.Request(url)
-            if token:
-                request.add_header("Authorization", f"Bearer {token}")
-            response = urllib.request.urlopen(request, timeout=timeout)
-            if response.status != 200:
-                response.close()
-                raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
-            return response
+            return func()
         except urllib.error.HTTPError as e:
-            if e.code == 403 or e.code == 429:  # Rate limit or forbidden
+            # Handle rate limiting with Retry-After header
+            if e.code in (403, 429) and attempt < max_retries - 1:
                 retry_after = e.headers.get('Retry-After')
-                if attempt < max_retries - 1:
-                    if retry_after:
-                        wait_time = int(retry_after)
-                        print(f"Rate limited. Retry-After header: {wait_time}s. Waiting...")
-                    else:
-                        wait_time = 2 ** attempt  # Exponential backoff
-                        print(f"Rate limited. No Retry-After header. Waiting {wait_time}s...")
-                    time.sleep(wait_time)
-                    continue
+                if retry_after:
+                    wait_time = int(retry_after)
+                    print(f"Rate limited. Retry-After: {wait_time}s. Waiting...")
                 else:
-                    raise RuntimeError(f"Rate limit exceeded for {url} after {max_retries} attempts")
+                    wait_time = 2 ** attempt
+                    print(f"Rate limited. Using exponential backoff: {wait_time}s...")
+                time.sleep(wait_time)
+            elif attempt < max_retries - 1:
+                # Other HTTP errors - use exponential backoff
+                wait_time = 2 ** attempt
+                print(f"HTTP error {e.code}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
             else:
-                raise RuntimeError(f"HTTP error {e.code} for {url}: {e.reason}")
-        except urllib.error.URLError as e:
+                raise
+        except (urllib.error.URLError, http.client.HTTPException) as e:
+            # Network errors - use exponential backoff
             if attempt < max_retries - 1:
                 wait_time = 2 ** attempt
-                print(f"Network error: {e.reason}. Retrying in {wait_time}s...")
+                print(f"Network error: {e}. Retrying in {wait_time}s...")
                 time.sleep(wait_time)
-                continue
             else:
-                raise RuntimeError(f"Network error: {e.reason}")
-        except http.client.HTTPException as e:
-            if attempt < max_retries - 1:
-                wait_time = 2 ** attempt
-                print(f"HTTP error: {e}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-                continue
-            else:
-                raise RuntimeError(f"HTTP error: {e}")
-    raise RuntimeError(f"Failed to fetch {url} after {max_retries} attempts")
+                raise
+    # Should not reach here, but just in case
+    raise RuntimeError(f"Failed after {max_retries} attempts")
 
 
 def fetch_url(url, timeout=10, token=None):
-    """Simple wrapper for backward compatibility."""
-    return fetch_url_with_retry(url, timeout, token)
+    """Fetch URL with optional authentication token."""
+    request = urllib.request.Request(url)
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    response = urllib.request.urlopen(request, timeout=timeout)
+    if response.status != 200:
+        response.close()
+        raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
+    return response
 
 
 def calculate_hash(response):
@@ -102,7 +110,7 @@ def main():
     print(f"Current version for '{package}': {current_version}")
 
     # Fetch the latest release info from the upstream repository
-    with fetch_url(f"https://api.github.com/repos/{repo}/releases/latest", token=github_token) as response:
+    with retry_with_backoff(lambda: fetch_url(f"https://api.github.com/repos/{repo}/releases/latest", token=github_token)) as response:
         release_data = json.load(response)
 
     # Parse the latest version from the release info
@@ -132,7 +140,7 @@ def main():
 
         print(f"Calculating hash for asset {asset_url} (architecture: {arch})")
 
-        with fetch_url(asset_url) as response:
+        with retry_with_backoff(lambda: fetch_url(asset_url)) as response:
             new_hash = calculate_hash(response)
         formatted_hash = f"SHA256:{new_hash}"
 
