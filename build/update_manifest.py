@@ -2,25 +2,74 @@
 
 import argparse
 import hashlib
-import http.client
 import json
+import os
 import re
 import subprocess
+import time
 import urllib.error
 import urllib.request
 
 
-def fetch_url(url, timeout=10):
-    try:
-        response = urllib.request.urlopen(url, timeout=timeout)
-        if response.status != 200:
-            response.close()
-            raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
-        return response
-    except urllib.error.URLError as e:
-        raise RuntimeError(f"Network error: {e.reason}")
-    except http.client.HTTPException as e:
-        raise RuntimeError(f"HTTP error: {e}")
+def fetch_url(url, timeout=10, token=None):
+    """Fetch URL with optional authentication token."""
+    request = urllib.request.Request(url)
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    response = urllib.request.urlopen(request, timeout=timeout)
+    if response.status != 200:
+        response.close()
+        raise RuntimeError(f"Failed to fetch URL {url}: HTTP {response.status}")
+    return response
+
+
+def retry_with_backoff(func, max_retries=3):
+    """
+    Generic retry wrapper that can retry any function with exponential backoff.
+    Honors Retry-After header for rate limiting errors.
+    
+    Args:
+        func: Callable to execute with retry logic
+        max_retries: Maximum number of retry attempts
+    
+    Returns:
+        The result of the successful function call
+    
+    Raises:
+        The last exception if all retries fail
+    """
+    for attempt in range(max_retries):
+        try:
+            return func()
+        except urllib.error.HTTPError as e:
+            # HTTPError is a subclass of URLError and contains HTTP status code and headers
+            if attempt < max_retries - 1:
+                # Check for rate limiting (403/429) and honor Retry-After header
+                if e.code in (403, 429):
+                    retry_after = e.headers.get('Retry-After')
+                    if retry_after:
+                        wait_time = int(retry_after)
+                        print(f"Rate limited (HTTP {e.code}). Retry-After: {wait_time}s. Waiting...")
+                    else:
+                        wait_time = 2 ** attempt
+                        print(f"Rate limited (HTTP {e.code}). Using exponential backoff: {wait_time}s...")
+                else:
+                    # Other HTTP errors - use exponential backoff
+                    wait_time = 2 ** attempt
+                    print(f"HTTP error {e.code}: {e.reason}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                raise
+        except urllib.error.URLError as e:
+            # Network-level errors (connection errors, timeouts, etc.)
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt
+                print(f"Network error: {e.reason}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                raise
+    # Should not reach here, but just in case
+    raise RuntimeError(f"Failed after {max_retries} attempts")
 
 
 def calculate_hash(response):
@@ -46,6 +95,13 @@ def main():
     assets = args.assets
     manifest_path = args.manifest
 
+    # Get GitHub token from environment variable
+    github_token = os.environ.get('GITHUB_TOKEN')
+    if github_token:
+        print("Using authenticated GitHub API requests")
+    else:
+        print("Warning: GITHUB_TOKEN not set, using unauthenticated requests (lower rate limit)")
+
     # Read the current version from the manifest
     with open(manifest_path, "r") as manifest_file:
         manifest_data = json.load(manifest_file)
@@ -54,7 +110,7 @@ def main():
     print(f"Current version for '{package}': {current_version}")
 
     # Fetch the latest release info from the upstream repository
-    with fetch_url(f"https://api.github.com/repos/{repo}/releases/latest") as response:
+    with retry_with_backoff(lambda: fetch_url(f"https://api.github.com/repos/{repo}/releases/latest", token=github_token)) as response:
         release_data = json.load(response)
 
     # Parse the latest version from the release info
@@ -84,7 +140,7 @@ def main():
 
         print(f"Calculating hash for asset {asset_url} (architecture: {arch})")
 
-        with fetch_url(asset_url) as response:
+        with retry_with_backoff(lambda: fetch_url(asset_url)) as response:
             new_hash = calculate_hash(response)
         formatted_hash = f"SHA256:{new_hash}"
 

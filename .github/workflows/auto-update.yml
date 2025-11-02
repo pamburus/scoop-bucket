@@ -9,6 +9,8 @@ on:
 jobs:
   update-manifests:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       max-parallel: 1
       fail-fast: false
